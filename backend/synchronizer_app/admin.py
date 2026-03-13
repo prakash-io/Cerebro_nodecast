@@ -7,8 +7,9 @@ class RoomAdmin(admin.ModelAdmin):
 
     list_display = (
         "room_code",
-        "video_url",
-        "playback_time",
+        "broadcaster",
+        "listener_count",
+        "media_mode",
         "is_playing",
         "created_at",
     )

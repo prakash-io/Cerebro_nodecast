@@ -16,7 +16,7 @@ export default function TerminalConsole({
     if (outputRef.current) {
       outputRef.current.scrollTop = outputRef.current.scrollHeight;
     }
-  }, [output]);
+  }, [output.length]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {

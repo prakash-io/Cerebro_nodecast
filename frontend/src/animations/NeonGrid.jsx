@@ -30,10 +30,10 @@ function AnimatedGrid() {
   );
 }
 
-export default function NeonGrid() {
+const NeonGrid = React.memo(function NeonGrid() {
   return (
     <div className="absolute inset-0 z-0 h-full w-full pointer-events-none opacity-60">
-      <Canvas>
+      <Canvas frameloop="always" dpr={[1, 1.5]}>
         <PerspectiveCamera makeDefault position={[0, 2, 8]} rotation={[-Math.PI / 8, 0, 0]} />
         <ambientLight intensity={0.5} />
         <pointLight position={[0, 5, 0]} intensity={2} color="#ff0033" />
@@ -44,4 +44,6 @@ export default function NeonGrid() {
       </Canvas>
     </div>
   );
-}
+});
+
+export default NeonGrid;

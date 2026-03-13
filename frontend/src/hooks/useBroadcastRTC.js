@@ -11,12 +11,21 @@ export function useBroadcastRTC({ mode, publish, listenerId, onLog, onMediaStatu
   const localStreamRef = useRef(null);
   const listenerPeerRef = useRef(null);
 
+  // Store all external callbacks in refs to avoid re-render loops
+  const publishRef = useRef(publish);
+  const onLogRef = useRef(onLog);
+  const onMediaStatusRef = useRef(onMediaStatus);
+
+  useEffect(() => { publishRef.current = publish; });
+  useEffect(() => { onLogRef.current = onLog; });
+  useEffect(() => { onMediaStatusRef.current = onMediaStatus; });
+
   const updateMediaStatus = useCallback((stream) => {
     const audioEnabled = Boolean(stream?.getAudioTracks().some((track) => track.enabled));
     const videoEnabled = Boolean(stream?.getVideoTracks().some((track) => track.enabled));
     const liveActive = Boolean(stream && stream.getTracks().length > 0);
-    onMediaStatus?.({ audioEnabled, videoEnabled, liveActive });
-  }, [onMediaStatus]);
+    onMediaStatusRef.current?.({ audioEnabled, videoEnabled, liveActive });
+  }, []);
 
   const cleanupPeer = useCallback((peerId) => {
     const peer = peersRef.current.get(peerId);
@@ -62,7 +71,7 @@ export function useBroadcastRTC({ mode, publish, listenerId, onLog, onMediaStatu
     attachTracks(peer);
     peer.onicecandidate = (event) => {
       if (event.candidate) {
-        publish("webrtc_ice_candidate", {
+        publishRef.current("webrtc_ice_candidate", {
           target_listener_id: targetListenerId,
           candidate: event.candidate,
         });
@@ -76,7 +85,7 @@ export function useBroadcastRTC({ mode, publish, listenerId, onLog, onMediaStatu
 
     peersRef.current.set(targetListenerId, peer);
     return peer;
-  }, [attachTracks, cleanupPeer, publish]);
+  }, [attachTracks, cleanupPeer]);
 
   const broadcastToListeners = useCallback(async (listenerIds) => {
     if (mode !== "broadcaster" || !localStreamRef.current) {
@@ -87,32 +96,32 @@ export function useBroadcastRTC({ mode, publish, listenerId, onLog, onMediaStatu
       const peer = createBroadcasterPeer(listenerKey);
       const offer = await peer.createOffer();
       await peer.setLocalDescription(offer);
-      publish("webrtc_offer", {
+      publishRef.current("webrtc_offer", {
         target_listener_id: listenerKey,
         sdp: offer,
       });
     }
-  }, [createBroadcasterPeer, mode, publish]);
+  }, [createBroadcasterPeer, mode]);
 
   const startLocalBroadcast = useCallback(async ({ video = false, audio = false }) => {
     const stream = await navigator.mediaDevices.getUserMedia({ video, audio });
     localStreamRef.current = stream;
     setLocalStream(stream);
     updateMediaStatus(stream);
-    onLog?.(`LIVE ${video ? "VIDEO" : "AUDIO"} READY`);
+    onLogRef.current?.(`LIVE ${video ? "VIDEO" : "AUDIO"} READY`);
     return stream;
-  }, [onLog, updateMediaStatus]);
+  }, [updateMediaStatus]);
 
   const handleSocketEvent = useCallback(async (payload) => {
-    const event = payload?.event;
-    const data = payload?.data || {};
+    const event = payload?.type || payload?.event;
+    const data = payload?.data || payload;
 
     if (mode === "broadcaster") {
       if ((event === "join_room" || event === "listener_ready") && data.listener_id && localStreamRef.current) {
         const peer = createBroadcasterPeer(data.listener_id);
         const offer = await peer.createOffer();
         await peer.setLocalDescription(offer);
-        publish("webrtc_offer", {
+        publishRef.current("webrtc_offer", {
           target_listener_id: data.listener_id,
           sdp: offer,
         });
@@ -149,7 +158,7 @@ export function useBroadcastRTC({ mode, publish, listenerId, onLog, onMediaStatu
       };
       peer.onicecandidate = (iceEvent) => {
         if (iceEvent.candidate) {
-          publish("webrtc_ice_candidate", {
+          publishRef.current("webrtc_ice_candidate", {
             listener_id: listenerId,
             candidate: iceEvent.candidate,
           });
@@ -160,7 +169,7 @@ export function useBroadcastRTC({ mode, publish, listenerId, onLog, onMediaStatu
       await peer.setRemoteDescription(new RTCSessionDescription(data.sdp));
       const answer = await peer.createAnswer();
       await peer.setLocalDescription(answer);
-      publish("webrtc_answer", {
+      publishRef.current("webrtc_answer", {
         listener_id: listenerId,
         sdp: answer,
       });
@@ -170,7 +179,7 @@ export function useBroadcastRTC({ mode, publish, listenerId, onLog, onMediaStatu
     if (event === "webrtc_ice_candidate" && data.target_listener_id === listenerId && data.candidate && listenerPeerRef.current) {
       await listenerPeerRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
     }
-  }, [createBroadcasterPeer, listenerId, mode, publish]);
+  }, [createBroadcasterPeer, listenerId, mode]);
 
   useEffect(() => () => stopLocalBroadcast(), [stopLocalBroadcast]);
 

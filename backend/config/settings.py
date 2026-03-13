@@ -138,29 +138,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
     "http://localhost:5173",
 ]
-INSTALLED_APPS = [
-
-    "django.contrib.admin",
-    "django.contrib.auth",
-    "django.contrib.contenttypes",
-    "django.contrib.sessions",
-    "django.contrib.messages",
-    "django.contrib.staticfiles",
-
-    "rest_framework",
-
-    "channels",
-
-    "synchronizer_app",
-
-]
-ASGI_APPLICATION = "config.routing.application"
-
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer"
-    }
-}
+CORS_ALLOW_ALL_ORIGINS = DEBUG
 
 # Channels
 redis_url = os.environ.get("REDIS_URL")

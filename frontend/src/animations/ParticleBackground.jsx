@@ -2,7 +2,7 @@ import React, { useCallback } from 'react';
 import Particles from '@tsparticles/react';
 import { loadSlim } from '@tsparticles/slim';
 
-export default function ParticleBackground() {
+const ParticleBackground = React.memo(function ParticleBackground() {
   const particlesInit = useCallback(async (engine) => {
     // Load slim bundle for faster initialization
     await loadSlim(engine);
@@ -17,7 +17,7 @@ export default function ParticleBackground() {
           background: {
             color: 'transparent',
           },
-          fpsLimit: 60,
+          fpsLimit: 30,
           particles: {
             color: {
               value: '#ff0033',
@@ -40,7 +40,7 @@ export default function ParticleBackground() {
                 enable: true,
                 area: 800,
               },
-              value: 60,
+              value: 30,
             },
             opacity: {
               value: { min: 0.1, max: 0.5 },
@@ -62,4 +62,6 @@ export default function ParticleBackground() {
       />
     </div>
   );
-}
+});
+
+export default ParticleBackground;

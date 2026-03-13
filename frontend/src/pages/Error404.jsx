@@ -1,41 +1,41 @@
-import { useNavigate } from "react-router-dom";
-
-import { AccessPanel } from "../components/AccessPanel";
+import { useNavigate, useRouteError } from "react-router-dom";
 import { Button } from "../components/ui/Button";
 
 export default function Error404() {
   const navigate = useNavigate();
+  const error = useRouteError?.() ?? null;
 
   return (
-    <AccessPanel
-      eyebrow="HAWKINS LAB NAVIGATION ERROR"
-      title="404 // SIGNAL LOST"
-      description="The requested transmission path does not exist. The route is either invalid or the room code is missing."
-      aside={
-        <div className="flex h-full flex-col justify-between">
-          <div className="font-press-start text-lg text-white">RECOVERY OPTIONS</div>
-          <div className="space-y-3 font-vt323 text-2xl text-white/65">
-            <div>1. Return to the control console</div>
-            <div>2. Create a fresh room</div>
-            <div>3. Join with a valid room code</div>
-          </div>
-          <div className="rounded-md border border-white/10 bg-black/50 p-4 font-vt323 text-xl text-white/50">
-            BROADCASTER PATHS REQUIRE A ROOM CODE AFTER CREATION.
-          </div>
+    <div className="relative min-h-screen overflow-hidden bg-black font-orbitron text-[#ff0033]">
+      <div className="crt-overlay pointer-events-none z-50" />
+      <div className="noise-bg pointer-events-none z-40" />
+
+      <div className="relative z-10 flex min-h-screen flex-col items-center justify-center gap-8 px-4 text-center">
+        <div className="font-press-start text-6xl tracking-widest text-[#ff0033] drop-shadow-[0_0_30px_rgba(255,0,51,0.5)] md:text-8xl">
+          404
         </div>
-      }
-    >
-      <div className="flex flex-col gap-4 sm:flex-row">
-        <Button variant="primary" size="lg" onClick={() => navigate("/")}>
-          RETURN HOME
-        </Button>
-        <Button variant="ghost" size="lg" onClick={() => navigate("/create-room")}>
-          CREATE ROOM
-        </Button>
-        <Button variant="ghost" size="lg" onClick={() => navigate("/join-room")}>
-          JOIN ROOM
-        </Button>
+
+        <div className="font-vt323 text-3xl tracking-[0.3em] text-[#ff6b81] md:text-4xl">
+          HAWKINS LAB NAVIGATION ERROR
+        </div>
+
+        <div className="max-w-md font-vt323 text-xl text-white/50">
+          {error?.statusText || error?.message || "The signal has been lost. This frequency does not exist in the current dimension."}
+        </div>
+
+        <div className="mt-4 flex flex-col gap-4 sm:flex-row">
+          <Button variant="primary" size="lg" onClick={() => navigate("/")} magnetic={false}>
+            RETURN TO BASE
+          </Button>
+          <Button variant="ghost" size="lg" onClick={() => navigate(-1)} magnetic={false}>
+            GO BACK
+          </Button>
+        </div>
+
+        <div className="mt-8 font-vt323 text-lg text-white/20">
+          ERROR CODE: DIMENSION_NOT_FOUND
+        </div>
       </div>
-    </AccessPanel>
+    </div>
   );
 }
