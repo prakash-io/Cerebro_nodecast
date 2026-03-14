@@ -1,4 +1,4 @@
-# Cerebro Code Red Synchronizer
+# Cerebro_Nodecast
 
 Realtime synchronized video broadcasting with a Django + Channels backend and a React + Vite Hawkins Lab interface.
 
