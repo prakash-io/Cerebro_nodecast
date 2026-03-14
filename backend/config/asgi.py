@@ -7,20 +7,20 @@ https://docs.djangoproject.com/en/stable/howto/deployment/asgi/
 """
 
 import os
-
 from django.core.asgi import get_asgi_application
-from channels.auth import AuthMiddlewareStack
-from channels.routing import ProtocolTypeRouter, URLRouter
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 
-import synchronizer_app.routing  # noqa: E402
+# Must be called BEFORE importing routing
+django_asgi_app = get_asgi_application()
 
-from channels.security.websocket import AllowedHostsOriginValidator
+from channels.auth import AuthMiddlewareStack
+from channels.routing import ProtocolTypeRouter, URLRouter
+import synchronizer_app.routing  # noqa: E402
 
 application = ProtocolTypeRouter(
     {
-        "http": get_asgi_application(),
+        "http": django_asgi_app,
         "websocket": AuthMiddlewareStack(
             URLRouter(
                 synchronizer_app.routing.websocket_urlpatterns
