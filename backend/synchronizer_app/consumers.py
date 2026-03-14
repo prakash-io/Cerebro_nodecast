@@ -9,6 +9,7 @@ class SyncConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.room_code = self.scope["url_route"]["kwargs"]["room_code"]
         self.room_group = f"room_{self.room_code}"
+        self.is_broadcaster = False
         
         # Last sync time for throttling
         self.last_sync_time = 0
@@ -45,6 +46,21 @@ class SyncConsumer(AsyncWebsocketConsumer):
                 },
             },
         )
+
+        # If the broadcaster leaves, delete the room so the code can be reused
+        if self.is_broadcaster:
+            await self.delete_room()
+            await self.channel_layer.group_send(
+                self.room_group,
+                {
+                    "type": "sync_message",
+                    "message": {
+                        "event": "room_closed",
+                        "data": {"reason": "Broadcaster left the room."}
+                    },
+                },
+            )
+
         await self.channel_layer.group_discard(
             self.room_group,
             self.channel_name,
@@ -57,7 +73,12 @@ class SyncConsumer(AsyncWebsocketConsumer):
             return
 
         event_type = data.get("type", data.get("event"))
-        
+
+        # Track broadcaster identity
+        if event_type == "identify" and data.get("role") == "broadcaster":
+            self.is_broadcaster = True
+            return
+
         # Prevent spam: throttle sync_state to once every 2 seconds
         # Other critical events (play, pause, webrtc, load_video, broadcast_message) bypass throttling.
         if event_type == "sync_state":
@@ -90,3 +111,9 @@ class SyncConsumer(AsyncWebsocketConsumer):
             return room.listener_count
         except Room.DoesNotExist:
             return 0
+
+    @database_sync_to_async
+    def delete_room(self):
+        from .models import Room
+        Room.objects.filter(room_code=self.room_code).delete()
+

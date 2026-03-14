@@ -27,6 +27,10 @@ export function useRealtimeSync(roomCode, role, config = {}) {
       reconnectCount.current = 0;
       updateTelemetry({ wsStatus: "connected" });
       pushLog("WS CONNECTED");
+      // Tell the server if this is the broadcaster
+      if (role === "broadcaster") {
+        ws.send(JSON.stringify({ type: "identify", role: "broadcaster" }));
+      }
     };
 
     ws.onmessage = (event) => {
