@@ -1,4 +1,5 @@
 import React, { startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { PhoneOff, Video, VideoOff, Phone, Mic, MicOff } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { GlitchTitle } from "../components/GlitchTitle";
@@ -44,8 +45,11 @@ function BroadcasterPanel() {
   const navigate = useNavigate();
   const playerRef = useRef(null);
   const publishRef = useRef(() => false);
+  const selfPreviewRef = useRef(null);
   const [mediaUrlInput, setMediaUrlInput] = useState("");
   const [messageInput, setMessageInput] = useState("");
+  const [cameraOn, setCameraOn] = useState(false);
+  const [micOn, setMicOn] = useState(false);
 
   const room = useSyncStore((state) => state.room);
   const sync = useSyncStore((state) => state.sync);
@@ -83,8 +87,20 @@ function BroadcasterPanel() {
     }
   }, [mediaUrlInput, sync.videoUrl]);
 
+  // Attach local stream to self-preview PiP
   useEffect(() => {
-    if (telemetry.wsStatus !== "connected" || !playerRef.current || !sync.videoUrl || rtc.localStream) {
+    const video = selfPreviewRef.current;
+    if (!video) return;
+    if (rtc.localStream) {
+      video.srcObject = rtc.localStream;
+      video.play().catch(() => {});
+    } else {
+      video.srcObject = null;
+    }
+  }, [rtc.localStream, cameraOn]);
+
+  useEffect(() => {
+    if (telemetry.wsStatus !== "connected" || !playerRef.current || !sync.videoUrl) {
       return undefined;
     }
 
@@ -102,7 +118,7 @@ function BroadcasterPanel() {
     }, 2000);
 
     return () => window.clearInterval(intervalId);
-  }, [publish, rtc.localStream, sync.videoUrl, telemetry.wsStatus]);
+  }, [publish, sync.videoUrl, telemetry.wsStatus]);
 
   const connectedListeners = room?.listener_count ?? telemetry.usersConnected ?? 0;
   const listeners = room?.listeners || [];
@@ -145,18 +161,48 @@ function BroadcasterPanel() {
 
   const startWebcamBroadcast = useCallback(async () => {
     await rtc.startLocalBroadcast({ video: true, audio: true });
+    setCameraOn(true);
+    setMicOn(true);
     await rtc.broadcastToListeners(listeners.map((listener) => listener.listener_id));
     publish("sync_state", { media_mode: "live" });
   }, [listeners, publish, rtc]);
 
   const startVoiceBroadcast = useCallback(async () => {
-    await rtc.startLocalBroadcast({ video: false, audio: true });
+    await rtc.startLocalBroadcast({ video: true, audio: true });
+    // Disable video tracks immediately for voice-only start
+    rtc.toggleVideo(false);
+    setCameraOn(false);
+    setMicOn(true);
     await rtc.broadcastToListeners(listeners.map((listener) => listener.listener_id));
     publish("sync_state", { media_mode: "live" });
   }, [listeners, publish, rtc]);
 
+  const handleToggleCamera = useCallback(() => {
+    const next = !cameraOn;
+    setCameraOn(next);
+    rtc.toggleVideo(next);
+    publishRef.current("media_status", {
+      audio_enabled: micOn,
+      video_enabled: next,
+      live_active: true,
+    });
+  }, [cameraOn, micOn, rtc]);
+
+  const handleToggleMic = useCallback(() => {
+    const next = !micOn;
+    setMicOn(next);
+    rtc.toggleAudio(next);
+    publishRef.current("media_status", {
+      audio_enabled: next,
+      video_enabled: cameraOn,
+      live_active: true,
+    });
+  }, [cameraOn, micOn, rtc]);
+
   const stopLiveBroadcast = useCallback(() => {
     rtc.stopLocalBroadcast();
+    setCameraOn(false);
+    setMicOn(false);
     publish("media_status", {
       audio_enabled: false,
       video_enabled: false,
@@ -175,10 +221,9 @@ function BroadcasterPanel() {
               <div className="font-vt323 text-xl tracking-[0.3em] text-[#ff6b81]">ROOM {roomCode}</div>
             </div>
             <div className="relative">
-              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_50%,transparent_50%)] bg-[length:100%_6px] opacity-20" />
+              <div className="pointer-events-none absolute inset-0 z-10 bg-[linear-gradient(rgba(255,255,255,0.03)_50%,transparent_50%)] bg-[length:100%_6px] opacity-20" />
               <VideoSyncPlayer
-                src={rtc.localStream ? "" : sync.videoUrl}
-                stream={rtc.localStream}
+                src={sync.videoUrl}
                 sync={{ ...sync, ...telemetry }}
                 isBroadcaster
                 onAction={(action, playbackTime, isPlaying) => {
@@ -191,6 +236,18 @@ function BroadcasterPanel() {
                 }}
                 videoElementRef={playerRef}
               />
+              {/* Broadcaster self-preview PiP */}
+              {rtc.localStream && cameraOn && (
+                <div className="absolute right-3 top-3 z-20 overflow-hidden rounded-xl border-2 border-[#00ff66]/50 shadow-[0_0_16px_rgba(0,255,102,0.3)]">
+                  <video
+                    ref={selfPreviewRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="h-[100px] w-[140px] object-cover"
+                  />
+                </div>
+              )}
             </div>
           </Card>
 
@@ -210,17 +267,51 @@ function BroadcasterPanel() {
                     LOAD VIDEO URL
                   </Button>
                 </form>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                  <Button variant="secondary" onClick={startWebcamBroadcast}>
-                    START VIDEO CALL
-                  </Button>
-                  <Button variant="secondary" onClick={startVoiceBroadcast}>
-                    START VOICE ONLY
-                  </Button>
-                  <Button variant="ghost" onClick={stopLiveBroadcast}>
-                    STOP LIVE
-                  </Button>
-                </div>
+                {rtc.localStream ? (
+                  <div className="flex items-center justify-center gap-4">
+                    {/* Camera toggle */}
+                    <button
+                      onClick={handleToggleCamera}
+                      className={`group flex h-14 w-14 items-center justify-center rounded-full border-2 transition-all duration-200 hover:scale-110 ${
+                        cameraOn
+                          ? "border-[#00ff66] bg-[#00ff66]/20 text-[#00ff66] shadow-[0_0_14px_rgba(0,255,102,0.3)] hover:bg-[#00ff66]/30"
+                          : "border-white/30 bg-white/10 text-white/50 hover:border-white/50 hover:bg-white/20"
+                      }`}
+                      title={cameraOn ? "Turn Off Camera" : "Turn On Camera"}
+                    >
+                      {cameraOn ? <Video className="h-6 w-6" /> : <VideoOff className="h-6 w-6" />}
+                    </button>
+                    {/* Mic toggle */}
+                    <button
+                      onClick={handleToggleMic}
+                      className={`group flex h-14 w-14 items-center justify-center rounded-full border-2 transition-all duration-200 hover:scale-110 ${
+                        micOn
+                          ? "border-[#00ff66] bg-[#00ff66]/20 text-[#00ff66] shadow-[0_0_14px_rgba(0,255,102,0.3)] hover:bg-[#00ff66]/30"
+                          : "border-white/30 bg-white/10 text-white/50 hover:border-white/50 hover:bg-white/20"
+                      }`}
+                      title={micOn ? "Mute Microphone" : "Unmute Microphone"}
+                    >
+                      {micOn ? <Mic className="h-6 w-6" /> : <MicOff className="h-6 w-6" />}
+                    </button>
+                    {/* End call */}
+                    <button
+                      onClick={stopLiveBroadcast}
+                      className="group flex h-14 w-14 items-center justify-center rounded-full border-2 border-red-500 bg-red-600/80 text-white shadow-[0_0_20px_rgba(255,0,0,0.4)] transition-all duration-200 hover:scale-110 hover:bg-red-500 hover:shadow-[0_0_30px_rgba(255,0,0,0.6)]"
+                      title="End Call"
+                    >
+                      <PhoneOff className="h-6 w-6" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-3">
+                    <Button variant="secondary" className="min-w-0 flex-1 basis-[140px]" onClick={startWebcamBroadcast}>
+                      <Video className="mr-2 h-4 w-4" /> VIDEO CALL
+                    </Button>
+                    <Button variant="secondary" className="min-w-0 flex-1 basis-[140px]" onClick={startVoiceBroadcast}>
+                      <Phone className="mr-2 h-4 w-4" /> VOICE ONLY
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
 

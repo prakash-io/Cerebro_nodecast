@@ -35,6 +35,20 @@ export function useBroadcastRTC({ mode, publish, listenerId, onLog, onMediaStatu
     }
   }, []);
 
+  const toggleVideo = useCallback((enabled) => {
+    const stream = localStreamRef.current;
+    if (!stream) return;
+    stream.getVideoTracks().forEach((track) => { track.enabled = enabled; });
+    updateMediaStatus(stream);
+  }, [updateMediaStatus]);
+
+  const toggleAudio = useCallback((enabled) => {
+    const stream = localStreamRef.current;
+    if (!stream) return;
+    stream.getAudioTracks().forEach((track) => { track.enabled = enabled; });
+    updateMediaStatus(stream);
+  }, [updateMediaStatus]);
+
   const stopLocalBroadcast = useCallback(() => {
     for (const peerId of peersRef.current.keys()) {
       cleanupPeer(peerId);
@@ -149,11 +163,13 @@ export function useBroadcastRTC({ mode, publish, listenerId, onLog, onMediaStatu
       }
 
       const peer = new RTCPeerConnection(RTC_CONFIG);
-      const inboundStream = new MediaStream();
-      setRemoteStream(inboundStream);
       peer.ontrack = (trackEvent) => {
-        for (const track of trackEvent.streams[0].getTracks()) {
-          inboundStream.addTrack(track);
+        if (trackEvent.streams && trackEvent.streams[0]) {
+          setRemoteStream(trackEvent.streams[0]);
+        } else {
+          // fallback if streams array is empty
+          const fallbackStream = new MediaStream([trackEvent.track]);
+          setRemoteStream(fallbackStream);
         }
       };
       peer.onicecandidate = (iceEvent) => {
@@ -188,6 +204,8 @@ export function useBroadcastRTC({ mode, publish, listenerId, onLog, onMediaStatu
     remoteStream,
     startLocalBroadcast,
     stopLocalBroadcast,
+    toggleVideo,
+    toggleAudio,
     handleSocketEvent,
     broadcastToListeners,
   };

@@ -76,18 +76,31 @@ export const useSyncStore = create((set) => ({
         ? state.telemetry.latencyHistory
         : [...state.telemetry.latencyHistory, { ts: Date.now(), value: data.latency_ms }].slice(-MAX_LATENCY_POINTS);
 
-      const nextRoom = state.room
-        ? {
-            ...state.room,
-            playback_time: data?.playback_time ?? state.room.playback_time,
-            is_playing: data?.is_playing ?? state.room.is_playing,
-            video_url: data?.video_url ?? state.room.video_url,
-            listener_count: data?.listener_count ?? state.room.listener_count,
-            listeners: data?.listeners ?? state.room.listeners,
-            latest_message: data?.message ?? data?.latest_message ?? state.room.latest_message,
-            media_mode: data?.media_mode ?? state.room.media_mode,
-          }
-        : state.room;
+      let nextListeners = state.room?.listeners ?? [];
+      const incomingListeners = data?.listeners;
+      if (incomingListeners) {
+        nextListeners = incomingListeners;
+      } else if ((event === "join_room" || event === "listener_ready") && data?.listener_id) {
+        if (!nextListeners.find(l => l.listener_id === data.listener_id)) {
+          nextListeners = [...nextListeners, {
+            listener_id: data.listener_id,
+            joined_at: new Date().toISOString(),
+            last_ping: new Date().toISOString()
+          }];
+        }
+      }
+
+      const currentRoom = state.room || {};
+      const nextRoom = {
+        ...currentRoom,
+        playback_time: data?.playback_time ?? currentRoom.playback_time,
+        is_playing: data?.is_playing ?? currentRoom.is_playing,
+        video_url: data?.video_url ?? currentRoom.video_url,
+        listener_count: data?.listener_count ?? currentRoom.listener_count,
+        listeners: nextListeners,
+        latest_message: data?.message ?? data?.latest_message ?? currentRoom.latest_message,
+        media_mode: data?.media_mode ?? currentRoom.media_mode,
+      };
 
       return {
         room: nextRoom,
@@ -106,7 +119,7 @@ export const useSyncStore = create((set) => ({
           latencyMs: nextLatency,
           syncOffsetMs: data?.sync_offset_ms ?? state.telemetry.syncOffsetMs,
           usersConnected: data?.listener_count ?? state.telemetry.usersConnected,
-          videoState: event === "play" ? "playing" : event === "pause" ? "paused" : state.telemetry.videoState,
+          videoState: event === "media_status" ? (data?.video_enabled ? "live" : "idle") : (event === "play" ? "playing" : event === "pause" ? "paused" : state.telemetry.videoState),
           audioState: event === "media_status" ? (data?.audio_enabled ? "live" : "idle") : state.telemetry.audioState,
           latencyHistory: nextHistory,
         },

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Mic } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { VideoSyncPlayer } from "../components/VideoSyncPlayer";
@@ -23,6 +24,56 @@ export default function ListenerScreen() {
     listenerId,
     publish: (...args) => publishRef.current(...args),
   });
+
+  const pipRef = useRef(null);
+  const audioRef = useRef(null);
+  const [hasRemoteVideo, setHasRemoteVideo] = useState(false);
+  const [hasRemoteAudio, setHasRemoteAudio] = useState(false);
+
+  // Detect remote stream tracks
+  useEffect(() => {
+    const stream = rtc.remoteStream;
+    if (!stream) {
+      setHasRemoteVideo(false);
+      setHasRemoteAudio(false);
+      return;
+    }
+    const checkTracks = () => {
+      setHasRemoteVideo(stream.getVideoTracks().length > 0);
+      setHasRemoteAudio(stream.getAudioTracks().length > 0);
+    };
+    checkTracks();
+    stream.addEventListener("addtrack", checkTracks);
+    stream.addEventListener("removetrack", checkTracks);
+    return () => {
+      stream.removeEventListener("addtrack", checkTracks);
+      stream.removeEventListener("removetrack", checkTracks);
+    };
+  }, [rtc.remoteStream]);
+
+  // Attach remote video stream to PiP element
+  useEffect(() => {
+    const video = pipRef.current;
+    if (!video) return;
+    if (rtc.remoteStream && hasRemoteVideo) {
+      video.srcObject = rtc.remoteStream;
+      video.play().catch(() => {});
+    } else {
+      video.srcObject = null;
+    }
+  }, [rtc.remoteStream, hasRemoteVideo, telemetry.videoState]);
+
+  // Always play remote stream audio through hidden audio element
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (rtc.remoteStream && hasRemoteAudio) {
+      audio.srcObject = rtc.remoteStream;
+      audio.play().catch(() => {});
+    } else {
+      audio.srcObject = null;
+    }
+  }, [rtc.remoteStream, hasRemoteAudio, hasRemoteVideo]);
 
   const { publish } = useRealtimeSync(roomCode, "listener", {
     listenerId,
@@ -74,12 +125,31 @@ export default function ListenerScreen() {
         </Button>
       </div>
 
-      <div className="mx-auto max-w-7xl overflow-hidden rounded-[28px] border border-[#ff0033]/30 bg-black/70 shadow-[0_0_30px_rgba(255,0,51,0.12)]">
+      <div className="relative mx-auto max-w-7xl overflow-hidden rounded-[28px] border border-[#ff0033]/30 bg-black/70 shadow-[0_0_30px_rgba(255,0,51,0.12)]">
         <VideoSyncPlayer
-          src={rtc.remoteStream ? "" : effectiveSync.videoUrl}
-          stream={rtc.remoteStream}
+          src={effectiveSync.videoUrl}
           sync={effectiveSync}
         />
+        {/* PiP overlay — broadcaster camera (video) */}
+        {hasRemoteVideo && telemetry.videoState === "live" && (
+          <div className="absolute bottom-4 right-4 z-20 overflow-hidden rounded-xl border-2 border-[#00ff66]/50 shadow-[0_0_20px_rgba(0,255,102,0.35)]">
+            <video
+              ref={pipRef}
+              autoPlay
+              playsInline
+              muted
+              className="h-[120px] w-[170px] object-cover"
+            />
+          </div>
+        )}
+        {/* Audio-only indicator */}
+        {telemetry.videoState !== "live" && telemetry.audioState === "live" && (
+          <div className="absolute bottom-4 right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full border-2 border-[#00ff66]/50 bg-black/70 shadow-[0_0_20px_rgba(0,255,102,0.35)]">
+            <Mic className="h-6 w-6 animate-pulse text-[#00ff66]" />
+          </div>
+        )}
+        {/* Hidden audio element — always plays remote stream audio */}
+        <audio ref={audioRef} autoPlay hidden />
       </div>
     </div>
   );
